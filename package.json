@@ -7,7 +7,9 @@
     "test:smtp": "node test-smtp.js"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^149.0.0",
     "dotenv": "^16.4.7",
-    "nodemailer": "^9.0.3"
+    "nodemailer": "^9.0.3",
+    "puppeteer-core": "^25.3.0"
   }
 }

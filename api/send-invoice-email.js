@@ -51,10 +51,8 @@ function findBrowserExecutable() {
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
-function renderHtmlToPdf(html, invoiceNumber) {
+function renderHtmlToPdfWithLocalBrowser(html, invoiceNumber, browser) {
   return new Promise((resolve, reject) => {
-    const browser = findBrowserExecutable();
-    if (!browser) return reject(new Error('Chrome or Edge not found for HTML PDF rendering'));
 
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crixy-invoice-'));
     const safeName = String(invoiceNumber || 'invoice').replace(/[^a-z0-9._-]/gi, '-');
@@ -87,6 +85,38 @@ function renderHtmlToPdf(html, invoiceNumber) {
       }
     });
   });
+}
+
+async function renderHtmlToPdfWithChromium(html) {
+  let browser;
+  try {
+    const chromium = require('@sparticuz/chromium');
+    const puppeteer = require('puppeteer-core');
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    return await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '0', right: '0', bottom: '0', left: '0' },
+    });
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
+async function renderHtmlToPdf(html, invoiceNumber) {
+  const browser = findBrowserExecutable();
+  if (browser) {
+    return renderHtmlToPdfWithLocalBrowser(html, invoiceNumber, browser);
+  }
+  return renderHtmlToPdfWithChromium(html);
 }
 
 function createSimpleInvoicePdf(payload) {
@@ -152,7 +182,7 @@ async function createInvoicePdf(payload) {
       const number = payload.invoice?.number || payload.quotation?.number || payload.quotation?.quoteNumber || 'document';
       return await renderHtmlToPdf(payload.pdfHtml, number);
     } catch (error) {
-      return createSimpleInvoicePdf(payload);
+      throw new Error(`Premium PDF render failed: ${error.message}`);
     }
   }
   return createSimpleInvoicePdf(payload);
