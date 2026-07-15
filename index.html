@@ -789,6 +789,7 @@ async function sendInvoiceEmail(inv,client,settings){
       const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(invoiceEmailPayload(inv,{...client,email:recipientEmail},settings))});
       const data=await res.json().catch(()=>({}));
       if(!res.ok||data.ok===false)throw new Error(data.error||'SMTP send failed');
+      if(data.pdf&&data.pdf!=='premium-html')throw new Error('Email sent without the premium PDF renderer. Redeploy the latest backend fix.');
       alert(`Invoice email sent to ${recipientEmail}`);
       return;
     }catch(err){
@@ -978,6 +979,7 @@ async function sendQuotationEmail(quote,settings){
     const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(quotationEmailPayload(quote,settings))});
     const data=await res.json().catch(()=>({}));
     if(!res.ok||data.ok===false)throw new Error(data.error||'SMTP send failed');
+    if(data.pdf&&data.pdf!=='premium-html')throw new Error('Email sent without the premium PDF renderer. Redeploy the latest backend fix.');
     alert(`Quotation email sent to ${recipientEmail}`);
     return true;
   }catch(err){

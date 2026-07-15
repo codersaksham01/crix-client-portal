@@ -177,15 +177,21 @@ function createSimpleInvoicePdf(payload) {
 }
 
 async function createInvoicePdf(payload) {
+  const hasDocumentPayload = Boolean(payload.invoice || payload.quotation || payload.kind === 'quotation');
+  if (hasDocumentPayload && !payload.pdfHtml) {
+    throw new Error('Premium PDF HTML was not received. Refresh the deployed site and confirm Admin Settings uses /api/send-invoice-email.');
+  }
+
   if (payload.pdfHtml) {
     try {
       const number = payload.invoice?.number || payload.quotation?.number || payload.quotation?.quoteNumber || 'document';
-      return await renderHtmlToPdf(payload.pdfHtml, number);
+      const buffer = await renderHtmlToPdf(payload.pdfHtml, number);
+      return { buffer, source: 'premium-html' };
     } catch (error) {
       throw new Error(`Premium PDF render failed: ${error.message}`);
     }
   }
-  return createSimpleInvoicePdf(payload);
+  return { buffer: createSimpleInvoicePdf(payload), source: 'simple-fallback' };
 }
 
 module.exports = async function handler(req, res) {
@@ -318,7 +324,7 @@ module.exports = async function handler(req, res) {
       </div>
     `;
 
-    const pdfBuffer = await createInvoicePdf(payload);
+    const pdf = await createInvoicePdf(payload);
 
     await transporter.sendMail({
       from: `"${senderName}" <${from}>`,
@@ -329,13 +335,13 @@ module.exports = async function handler(req, res) {
       attachments: [
         {
           filename: `${docNumber || (isQuotation ? 'quotation' : 'invoice')}.pdf`,
-          content: pdfBuffer,
+          content: pdf.buffer,
           contentType: 'application/pdf',
         },
       ],
     });
 
-    return res.status(200).json({ ok: true });
+    return res.status(200).json({ ok: true, pdf: pdf.source, version: 'premium-pdf-2026-07-16' });
   } catch (error) {
     return res.status(500).json({ ok: false, error: error.message || 'Unable to send email' });
   }
