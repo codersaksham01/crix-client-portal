@@ -1,0 +1,266 @@
+function openPrintPDF(htmlContent,title){
+  const w=window.open('','_blank','width=800,height=600');
+  if(!w){alert('Please allow popups to download PDF');return;}
+  w.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',Arial,Helvetica,sans-serif;color:#0f1117;font-size:13px;line-height:1.5;padding:0}
+.page{max-width:800px;margin:0 auto;padding:20px 32px}
+.header{background:#0f1117;color:#fff;padding:24px 32px;display:flex;justify-content:space-between;align-items:center;border-radius:0}
+.header-left{display:flex;align-items:center;gap:14px}
+.logo{width:44px;height:44px;border-radius:10px;object-fit:contain}
+.company-name{font-size:20px;font-weight:800;letter-spacing:-.3px}
+.company-tag{font-size:11px;color:#b4b4cc;margin-top:2px}
+.header-right{text-align:right;font-size:11px;color:#b4b4cc;line-height:1.7}
+.accent-bar{height:3px;background:linear-gradient(90deg,#f8fafc,#9ca3af)}
+.doc-title{font-size:22px;font-weight:800;margin:24px 0 4px;color:#0f1117}
+.doc-subtitle{font-size:13px;color:#64748b;margin-bottom:4px}
+.doc-date{font-size:11px;color:#94a3b8;margin-bottom:20px}
+.divider{height:1px;background:#e5e7eb;margin:6px 0 16px}
+.summary-row{display:flex;gap:12px;margin-bottom:20px}
+.summary-card{flex:1;background:#f8f9fc;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;text-align:center}
+.summary-label{font-size:10px;color:#64748b;text-transform:uppercase;font-weight:600;letter-spacing:.5px}
+.summary-value{font-size:18px;font-weight:800;color:#0f1117;margin-top:4px}
+.client-box{background:#f8f9fc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px;margin-bottom:16px}
+.client-label{font-size:9px;text-transform:uppercase;font-weight:700;color:#64748b;letter-spacing:.5px;margin-bottom:6px}
+.client-name{font-size:15px;font-weight:700;color:#0f1117}
+.client-detail{font-size:12px;color:#64748b;margin-top:2px}
+.inv-box{background:#f8f9fc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px;margin-bottom:16px;display:inline-block;float:right}
+.inv-num{font-size:16px;font-weight:800;color:#f8fafc}
+.inv-detail{font-size:11px;color:#64748b;margin-top:2px}
+.inv-badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:10px;font-weight:700;color:#fff;margin-top:6px}
+.badge-paid{background:#10b981}.badge-overdue{background:#ef4444}.badge-draft{background:#f8fafc}.badge-sent{background:#3b82f6}
+table{width:100%;border-collapse:collapse;margin-bottom:16px}
+thead th{background:#f8fafc;color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:10px 14px;text-align:left}
+tbody td{padding:10px 14px;border-bottom:1px solid #eef0f4;font-size:12px}
+tbody tr:nth-child(even) td{background:#f8f9fc}
+tbody tr:last-child td{border-bottom:none}
+.total-section{text-align:right;margin-top:16px;padding-top:12px;border-top:2px solid #e5e7eb}
+.total-row{display:flex;justify-content:flex-end;gap:40px;font-size:12px;color:#64748b;margin-bottom:4px}
+.total-row.grand{font-size:18px;font-weight:800;color:#f8fafc;margin-top:8px;padding-top:8px;border-top:2px solid #f8fafc}
+.total-label{min-width:80px}
+.notes-section{margin-top:20px;padding:12px 16px;background:#f8f9fc;border-radius:8px;border:1px solid #e5e7eb}
+.notes-title{font-size:10px;text-transform:uppercase;font-weight:700;color:#64748b;letter-spacing:.5px;margin-bottom:4px}
+.notes-text{font-size:12px;color:#0f1117;line-height:1.6}
+.footer{background:#0f1117;color:#b4b4cc;padding:14px 32px;font-size:10px;text-align:center;margin-top:32px}
+.clear{clear:both}
+.no-print{margin:20px auto;text-align:center}
+.no-print button{padding:10px 32px;font-size:14px;font-weight:600;border:none;border-radius:8px;cursor:pointer;font-family:inherit}
+.print-btn{background:#f8fafc;color:#fff;margin-right:8px}.print-btn:hover{background:#5558e8}
+.close-btn{background:#e5e7eb;color:#333}.close-btn:hover{background:#d1d5db}
+@media print{.no-print{display:none!important}.header{-webkit-print-color-adjust:exact;print-color-adjust:exact}.accent-bar{-webkit-print-color-adjust:exact;print-color-adjust:exact}thead th{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#f8fafc!important;color:#fff!important}tbody tr:nth-child(even) td{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#f8f9fc!important}.footer{-webkit-print-color-adjust:exact;print-color-adjust:exact}.summary-card{-webkit-print-color-adjust:exact;print-color-adjust:exact}.inv-badge{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{padding:0}}
+</style></head><body>
+<div class="no-print"><button class="print-btn" onclick="window.print()">📄 Save as PDF / Print</button><button class="close-btn" onclick="window.close()">Close</button></div>
+${htmlContent}
+</body></html>`);
+  w.document.close();
+}
+
+function buildPDFHeader(){
+  return `<div class="header"><div class="header-left"><img src="${LOGO_B64}" alt="Logo" style="width:44px;height:44px;border-radius:10px;object-fit:contain"><div><div class="company-name">${COMPANY.name}</div><div class="company-tag">${COMPANY.tagline}</div></div></div><div class="header-right">${COMPANY.phone}<br>${COMPANY.email}<br>${COMPANY.website}</div></div><div class="accent-bar"></div>`;
+}
+
+function buildPDFFooter(){
+  return `<div class="footer">${COMPANY.name} &nbsp;|&nbsp; ${COMPANY.phone} &nbsp;|&nbsp; ${COMPANY.email}</div>`;
+}
+
+function downloadReportPDF(title,subtitle,headers,rows,summaryCards){
+  let html=buildPDFHeader();
+  html+=`<div class="page">`;
+  html+=`<div class="doc-title">${title}</div>`;
+  if(subtitle)html+=`<div class="doc-subtitle">${subtitle}</div>`;
+  html+=`<div class="doc-date">Generated: ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</div>`;
+  html+=`<div class="divider"></div>`;
+  if(summaryCards&&summaryCards.length){
+    html+=`<div class="summary-row">${summaryCards.map(c=>`<div class="summary-card"><div class="summary-label">${c.label}</div><div class="summary-value">${c.value}</div></div>`).join('')}</div>`;
+  }
+  if(headers&&rows){
+    html+=`<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c||'—'}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  }
+  html+=`</div>`;
+  html+=buildPDFFooter();
+  openPrintPDF(html,title);
+}
+
+function downloadInvoicePDF(inv,client,settings){
+  let html=buildPDFHeader();
+  html+=`<div class="page">`;
+  html+=`<div class="doc-title">INVOICE</div>`;
+  html+=`<div class="doc-date">Generated: ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</div>`;
+  html+=`<div class="divider"></div>`;
+  // Client + Invoice info side by side
+  html+=`<div style="display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap">`;
+  html+=`<div class="client-box" style="flex:1;min-width:200px"><div class="client-label">Bill To</div><div class="client-name">${client.name||client.company||''}</div>`;
+  if(client.company)html+=`<div class="client-detail">${client.company}</div>`;
+  if(client.email)html+=`<div class="client-detail">${client.email}</div>`;
+  if(client.phone)html+=`<div class="client-detail">${client.phone}</div>`;
+  html+=`</div>`;
+  const badgeCls=inv.status==='paid'?'badge-paid':inv.status==='overdue'?'badge-overdue':inv.status==='sent'?'badge-sent':'badge-draft';
+  html+=`<div class="client-box" style="min-width:180px"><div class="client-label">Invoice Details</div><div class="inv-num">${inv.number||'—'}</div>`;
+  html+=`<div class="inv-detail">Date: ${inv.createdAt?new Date(inv.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'—'}</div>`;
+  html+=`<div class="inv-detail">Due: ${inv.dueDate?new Date(inv.dueDate).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'—'}</div>`;
+  html+=`<div class="inv-badge ${badgeCls}">${(inv.status||'draft').toUpperCase()}</div>`;
+  html+=`</div></div>`;
+  // Table
+  html+=`<table><thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody><tr><td>${inv.description||''}</td><td style="text-align:right;font-weight:700">₹${Number(inv.amount||0).toLocaleString('en-IN')}</td></tr></tbody></table>`;
+  // Totals
+  const gstRate=inv.gstRate||0;
+  const gstAmt=inv.gstAmount||Math.round((inv.amount||0)*gstRate/100);
+  const total=(inv.amount||0)+gstAmt;
+  html+=`<div class="total-section">`;
+  html+=`<div class="total-row"><span class="total-label">Subtotal</span><span>₹${Number(inv.amount||0).toLocaleString('en-IN')}</span></div>`;
+  if(gstRate>0){
+    html+=`<div class="total-row"><span class="total-label">GST (${gstRate}%)</span><span>₹${gstAmt.toLocaleString('en-IN')}</span></div>`;
+  }
+  html+=`<div class="total-row grand"><span class="total-label">TOTAL</span><span>₹${total.toLocaleString('en-IN')}</span></div>`;
+  html+=`</div>`;
+  if(inv.notes){
+    html+=`<div class="notes-section"><div class="notes-title">Notes</div><div class="notes-text">${inv.notes}</div></div>`;
+  }
+  html+=`</div>`;
+  html+=buildPDFFooter();
+  openPrintPDF(html,inv.number||'Invoice');
+}
+
+const escHtml=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const pdfCurr=n=>`${(n??0).toLocaleString('en-IN')}`;
+const pdfSection=(title,body)=>`<div style="margin-top:20px"><div style="font-size:10px;text-transform:uppercase;font-weight:800;letter-spacing:.14em;color:#64748b;margin-bottom:8px">${escHtml(title)}</div>${body}</div>`;
+const pdfList=items=>`<div style="display:grid;gap:8px">${items.map(i=>`<div style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff">${i}</div>`).join('')}</div>`;
+const pdfSummaryCards=cards=>`<div class="summary-row">${cards.map(c=>`<div class="summary-card"><div class="summary-label">${escHtml(c.label)}</div><div class="summary-value">${escHtml(c.value)}</div></div>`).join('')}</div>`;
+const pdfStatusChip=(label,color='#111111')=>`<span style="display:inline-block;padding:4px 10px;border-radius:999px;background:${color};color:#fff;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase">${escHtml(label)}</span>`;
+function openBrandedPDF({title,subtitle='',coverTitle='',watermark='',body='',filename='document'}){
+  let html=buildPDFHeader();
+  html+=`<div class="page">`;
+  if(coverTitle){
+    html+=`<div style="padding:42px 0 28px;border-bottom:1px solid #e5e7eb;margin-bottom:22px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.22em;color:#64748b;font-weight:800;margin-bottom:10px">${escHtml(COMPANY.name)}</div>
+      <div style="font-size:34px;font-weight:900;line-height:1.05;color:#0f1117;max-width:560px">${escHtml(coverTitle)}</div>
+      ${subtitle?`<div style="font-size:14px;color:#64748b;margin-top:12px;max-width:560px">${escHtml(subtitle)}</div>`:''}
+      <div style="font-size:11px;color:#94a3b8;margin-top:20px">Generated ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</div>
+    </div>`;
+  }else{
+    html+=`<div class="doc-title">${escHtml(title)}</div>`;
+    if(subtitle)html+=`<div class="doc-subtitle">${escHtml(subtitle)}</div>`;
+    html+=`<div class="doc-date">Generated: ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</div><div class="divider"></div>`;
+  }
+  if(watermark)html+=`<div style="position:fixed;top:45%;left:50%;transform:translate(-50%,-50%) rotate(-24deg);font-size:84px;font-weight:900;color:rgba(255,255,255,.08);pointer-events:none;z-index:0">${escHtml(watermark)}</div>`;
+  html+=`<div style="position:relative;z-index:1">${body}</div></div>`;
+  html+=buildPDFFooter();
+  openPrintPDF(html,filename||title);
+}
+
+function downloadProposalPDF(proposal,client,settings){
+  const cards=[
+    {label:'Proposal Amount',value:`₹${pdfCurr(proposal.amount||0)}`},
+    {label:'Valid Until',value:proposal.validUntil?fmt(proposal.validUntil):'Open'},
+    {label:'Status',value:(proposal.status||'draft').toUpperCase()},
+  ];
+  const scope=proposal.items?.length?proposal.items.map(i=>`<div style="display:flex;justify-content:space-between;gap:12px"><span>${escHtml(i.label||'Scope Item')}</span><strong>₹${pdfCurr(i.amount||0)}</strong></div>`):[`<div>${escHtml(proposal.description||proposal.title||'Proposal scope')}</div>`];
+  const body=pdfSummaryCards(cards)
+    + pdfSection('Prepared For', `<div class="client-box"><div class="client-name">${escHtml(client.name||client.company||'Client')}</div><div class="client-detail">${escHtml(client.company||'')}</div><div class="client-detail">${escHtml(client.email||'')}</div></div>`)
+    + pdfSection('Project Scope', pdfList(scope))
+    + pdfSection('Commercials', `<table><thead><tr><th>Item</th><th style="text-align:right">Amount</th></tr></thead><tbody><tr><td>${escHtml(proposal.title||'Project Proposal')}</td><td style="text-align:right;font-weight:700">₹${pdfCurr(proposal.amount||0)}</td></tr></tbody></table>`)
+    + pdfSection('Terms', `<div class="notes-section"><div class="notes-text">${escHtml(proposal.description||settings.invoiceNotes||'Pricing is valid during the proposal validity window. Work begins after approval and project confirmation.')}</div></div>`)
+    + pdfSection('Acceptance', `<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px"><div style="padding-top:28px;border-top:1px solid #cbd5e1;font-size:12px">Client Name / Signature</div><div style="padding-top:28px;border-top:1px solid #cbd5e1;font-size:12px">Date</div></div>`);
+  openBrandedPDF({title:proposal.title||'Proposal',subtitle:`Quotation for ${client.name||'Client'}`,coverTitle:proposal.title||'Project Proposal',watermark:(proposal.status||'draft').toUpperCase(),body,filename:proposal.title||'Proposal'});
+}
+
+function downloadReceiptPDF(inv,payment,client){
+  const body=pdfSummaryCards([
+    {label:'Receipt',value:inv.number||'Payment'},
+    {label:'Received',value:`₹${pdfCurr(payment.amount||0)}`},
+    {label:'Method',value:payment.method||'Payment'},
+  ])
+  + pdfSection('Received From', `<div class="client-box"><div class="client-name">${escHtml(client.name||client.company||'Client')}</div><div class="client-detail">${escHtml(client.email||'')}</div></div>`)
+  + pdfSection('Payment Details', `<table><thead><tr><th>Description</th><th>Date</th><th style="text-align:right">Amount</th></tr></thead><tbody><tr><td>${escHtml(inv.description||inv.number||'Invoice payment')}</td><td>${escHtml(fmt(payment.date||payment.createdAt))}</td><td style="text-align:right;font-weight:700">₹${pdfCurr(payment.amount||0)}</td></tr></tbody></table>`)
+  + pdfSection('Receipt Note', `<div class="notes-section"><div class="notes-text">This receipt acknowledges payment against invoice ${escHtml(inv.number||'')}.</div></div>`);
+  openBrandedPDF({title:'Payment Receipt',subtitle:`Receipt for ${client.name||'Client'}`,coverTitle:'Payment Receipt',watermark:'RECEIVED',body,filename:`Receipt-${inv.number||'payment'}`});
+}
+
+function downloadContractPDF(contract,client){
+  const body=pdfSummaryCards([
+    {label:'Contract Value',value:contract.value?`₹${pdfCurr(contract.value)}`:'Not set'},
+    {label:'Status',value:(contract.status||'draft').toUpperCase()},
+    {label:'Term',value:`${contract.startDate?fmt(contract.startDate):'Start'} - ${contract.endDate?fmt(contract.endDate):'Open'}`},
+  ])
+  + pdfSection('Parties', `<div class="client-box"><div class="client-name">${escHtml(COMPANY.name)}</div><div class="client-detail">${escHtml(client.name||client.company||'Client')}</div><div class="client-detail">${escHtml(client.email||'')}</div></div>`)
+  + pdfSection('Agreement Summary', `<div class="notes-section"><div class="notes-text">${escHtml(contract.notes||contract.title||'This agreement covers the described scope, payment schedule, and delivery terms for the project.')}</div></div>`)
+  + pdfSection('Execution', `<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px"><div style="padding-top:28px;border-top:1px solid #cbd5e1;font-size:12px">${escHtml(COMPANY.name)} Signature</div><div style="padding-top:28px;border-top:1px solid #cbd5e1;font-size:12px">${escHtml(client.name||'Client')} Signature</div></div>${contract.signedAt?`<div style="margin-top:12px;font-size:11px;color:#64748b">Signed on ${escHtml(fmt(contract.signedAt))}</div>`:''}`);
+  openBrandedPDF({title:contract.title||'Contract',subtitle:`Agreement for ${client.name||'Client'}`,coverTitle:contract.title||'Service Agreement',watermark:(contract.status||'draft').toUpperCase(),body,filename:contract.title||'Contract'});
+}
+
+function downloadApprovalSummaryPDF(client){
+  const approvals=ensureArr(client.approvals);
+  const body=pdfSummaryCards([
+    {label:'Total Requests',value:String(approvals.length)},
+    {label:'Approved',value:String(approvals.filter(a=>a.status==='approved').length)},
+    {label:'Pending',value:String(approvals.filter(a=>a.status==='pending').length)},
+  ]) + pdfSection('Approval Log', `<table><thead><tr><th>Title</th><th>Category</th><th>Status</th><th>Client Comment</th></tr></thead><tbody>${approvals.map(a=>`<tr><td>${escHtml(a.title||'')}</td><td>${escHtml(a.category||'')}</td><td>${escHtml(a.status||'pending')}</td><td>${escHtml(a.clientComment||'—')}</td></tr>`).join('')}</tbody></table>`);
+  openBrandedPDF({title:'Approval Summary',subtitle:`Approval decisions for ${client.name||'Client'}`,body,filename:`Approval-Summary-${client.name||'client'}`});
+}
+
+function downloadFeedbackReportPDF(client){
+  const feedback=ensureArr(client.feedback);
+  const body=pdfSummaryCards([
+    {label:'Requests',value:String(feedback.length)},
+    {label:'Responded',value:String(feedback.filter(f=>f.response!==null).length)},
+    {label:'Testimonials',value:String(feedback.filter(f=>(f.category||'')==='testimonial').length)},
+  ]) + pdfSection('Responses', `<table><thead><tr><th>Question</th><th>Category</th><th>Response</th></tr></thead><tbody>${feedback.map(f=>`<tr><td>${escHtml(f.question||'')}</td><td>${escHtml(f.category||'feedback')}</td><td>${escHtml(f.response===null?'Pending':(f.type==='rating'?'★'.repeat(f.response):String(f.response)))}</td></tr>`).join('')}</tbody></table>`);
+  openBrandedPDF({title:'Feedback Report',subtitle:`Client feedback for ${client.name||'Client'}`,body,filename:`Feedback-${client.name||'client'}`});
+}
+
+function downloadActivityReportPDF(client,settings){
+  const body=pdfSummaryCards([
+    {label:'Activity Items',value:String(ensureArr(client.activity).length)},
+    {label:'Messages',value:String(ensureArr(client.messages).length)},
+    {label:'Approvals',value:String(ensureArr(client.approvals).length)},
+  ]) + pdfSection('Timeline', `<table><thead><tr><th>Date</th><th>Actor</th><th>Action</th></tr></thead><tbody>${ensureArr(client.activity).map(a=>`<tr><td>${escHtml(fmt(a.ts))}</td><td>${escHtml(a.by==='admin'?(settings?.businessName||'Admin'):(a.by||'System'))}</td><td>${escHtml(a.action||'')}</td></tr>`).join('')}</tbody></table>`);
+  openBrandedPDF({title:'Client Activity Report',subtitle:`Timeline for ${client.name||'Client'}`,body,filename:`Activity-${client.name||'client'}`});
+}
+
+function downloadProjectStatusPDF(client,settings){
+  const tasks=ensureArr(client.tasks);
+  const approvals=ensureArr(client.approvals);
+  const files=ensureArr(client.files);
+  const body=pdfSummaryCards([
+    {label:'Progress',value:`${client.progress||0}%`},
+    {label:'Tasks',value:`${tasks.filter(t=>t.status==='completed').length}/${tasks.length}`},
+    {label:'Pending Approvals',value:String(approvals.filter(a=>a.status==='pending').length)},
+  ])
+  + pdfSection('Project Snapshot', `<div class="notes-section"><div class="notes-text">${escHtml(client.description||client.projectName||'Project status summary')}</div></div>`)
+  + pdfSection('Tasks', `<table><thead><tr><th>Task</th><th>Status</th><th>Priority</th><th>Due</th></tr></thead><tbody>${tasks.map(t=>`<tr><td>${escHtml(t.title||'')}</td><td>${escHtml(t.status||'todo')}</td><td>${escHtml(t.priority||'medium')}</td><td>${escHtml(t.dueDate?fmt(t.dueDate):'—')}</td></tr>`).join('')}</tbody></table>`)
+  + pdfSection('Shared Files', `<table><thead><tr><th>Name</th><th>Folder</th><th>Date</th></tr></thead><tbody>${files.map(f=>`<tr><td>${escHtml(f.name||'')}</td><td>${escHtml(f.folder||'General')}</td><td>${escHtml(f.addedDate?fmt(f.addedDate):'—')}</td></tr>`).join('')}</tbody></table>`);
+  openBrandedPDF({title:'Project Status Report',subtitle:`Status report for ${client.name||'Client'}`,body,filename:`Project-Status-${client.name||'client'}`});
+}
+
+function downloadHandoverPDF(client){
+  const files=ensureArr(client.files);
+  const links=ensureArr(client.links);
+  const body=pdfSummaryCards([
+    {label:'Deliverables',value:String(files.length)},
+    {label:'Useful Links',value:String(links.length)},
+    {label:'Project Status',value:String(client.status||'Completed')},
+  ])
+  + pdfSection('Handover Notes', `<div class="notes-section"><div class="notes-text">${escHtml(client.description||'Project handover package and final delivery summary.')}</div></div>`)
+  + pdfSection('Deliverables', `<table><thead><tr><th>Name</th><th>Folder</th><th>Version</th></tr></thead><tbody>${files.map(f=>`<tr><td>${escHtml(f.name||'')}</td><td>${escHtml(f.folder||'General')}</td><td>${escHtml(f.version||'—')}</td></tr>`).join('')}</tbody></table>`)
+  + pdfSection('Key Links', `<table><thead><tr><th>Title</th><th>Category</th><th>URL</th></tr></thead><tbody>${links.map(l=>`<tr><td>${escHtml(l.title||'')}</td><td>${escHtml(l.category||'General')}</td><td>${escHtml(l.url||'')}</td></tr>`).join('')}</tbody></table>`);
+  openBrandedPDF({title:'Project Handover Pack',subtitle:`Final handover for ${client.name||'Client'}`,coverTitle:'Project Handover',watermark:'HANDOVER',body,filename:`Handover-${client.name||'client'}`});
+}
+
+function downloadOutstandingPaymentsPDF(clients){
+  const rows=[];
+  clients.forEach(c=>ensureArr(c.invoices).forEach(inv=>{const balance=getInvoiceBalance(inv); if(balance>0)rows.push([c.name||'Client',inv.number||'—',inv.description||'',`₹${pdfCurr(balance)}`,inv.dueDate?fmt(inv.dueDate):'—',inv.status||'draft']);}));
+  downloadReportPDF('Outstanding Payments','Invoices with pending balances',['Client','Invoice','Description','Balance','Due','Status'],rows,[{label:'Open Invoices',value:rows.length},{label:'Total Pending',value:`₹${pdfCurr(rows.reduce((a,r)=>a+Number(String(r[3]).replace(/[^\d.]/g,'')),0))}`}]);
+}
+
+function downloadTaxSummaryPDF(clients){
+  let totalTax=0,totalInvoiced=0;
+  clients.forEach(c=>ensureArr(c.invoices).forEach(inv=>{totalTax+=Number(inv.gstAmount||0);totalInvoiced+=getInvoiceTotal(inv);}));
+  downloadReportPDF('Tax Summary','GST / tax overview across all invoices',['Metric','Value'],[['Total Invoiced',`₹${pdfCurr(totalInvoiced)}`],['Total GST/Tax',`₹${pdfCurr(totalTax)}`],['Invoice Count',String(clients.reduce((a,c)=>a+ensureArr(c.invoices).length,0))]],[{label:'Total Tax',value:`₹${pdfCurr(totalTax)}`},{label:'Invoices',value:clients.reduce((a,c)=>a+ensureArr(c.invoices).length,0)}]);
+}
+
+function downloadProfitabilityPDF(clients,settings){
+  const rows=clients.map(c=>{const revenue=ensureArr(c.invoices).reduce((a,i)=>a+getInvoicePaidAmount(i),0);const expenses=ensureArr(c.expenses).reduce((a,e)=>a+Number(e.amount||0),0);const hours=ensureArr(c.timeEntries).reduce((a,t)=>a+Number(t.hours||0),0);const labor=hours*Number(settings.hourlyRate||0);const profit=revenue-expenses-labor;return [c.name||'Client',`₹${pdfCurr(revenue)}`,`₹${pdfCurr(expenses)}`,`${hours.toFixed(2)}h`,`₹${pdfCurr(profit)}`];});
+  downloadReportPDF('Profitability Report','Revenue, expenses, labor, and estimated profit',['Client','Collected Revenue','Expenses','Hours','Estimated Profit'],rows,[{label:'Clients',value:clients.length},{label:'Hourly Rate',value:`₹${pdfCurr(settings.hourlyRate||0)}`}]);
+}

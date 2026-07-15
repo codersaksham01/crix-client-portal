@@ -1,0 +1,11 @@
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+  included_files = ["api/**"]
+
+[[redirects]]
+  from = "/api/send-invoice-email"
+  to = "/.netlify/functions/send-invoice-email"
+  status = 200

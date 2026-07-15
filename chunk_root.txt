@@ -1,0 +1,14 @@
+/* ═══ ROOT APP ═══ */
+function App(){
+  const params=new URLSearchParams(window.location.search);
+  const clientId=params.get('client');
+  const [panel,setPanel]=useState(()=>{try{return localStorage.getItem('ut_panel_mode')||'admin';}catch{return'admin';}});
+  const switchPanel=next=>{setPanel(next);try{localStorage.setItem('ut_panel_mode',next);}catch{}};
+  if(clientId)return <ClientPortalApp clientId={clientId}/>;
+  if(panel==='manager')return <ManagerApp onSwitchPanel={switchPanel}/>;
+  if(panel==='staff')return <StaffApp onSwitchPanel={switchPanel}/>;
+  return <AdminApp onSwitchPanel={switchPanel}/>;
+}
+
+const root=ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);

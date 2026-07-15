@@ -1,0 +1,515 @@
+function ManagerApp({onSwitchPanel}){
+  const [settings,setSettings]=useState(DEF_SETTINGS);
+  const [clients,setClients]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [authed,setAuthed]=useState(()=>{try{return localStorage.getItem('ut_manager_authed')==='true';}catch{return false;}});
+  const [needsSetup,setNeedsSetup]=useState(false);
+  const [page,setPage]=useState('dashboard');
+  const [selId,setSelId]=useState(null);
+  const [sideCollapsed,setSideCollapsed]=useState(false);
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
+  const {show,ToastEl}=useToast();
+  useEffect(()=>{Promise.all([getSettings(),getClients()]).then(([s,c])=>{setSettings(s);setClients(c);setNeedsSetup(!s.managerProfile);setLoading(false);});},[]);
+  const saveProfile=profile=>{const next=pushManagerAudit({...settings,managerProfile:profile},{type:'profile_setup',actor:'manager',action:'Manager profile saved'});setSettings(next);saveSettings(next);setNeedsSetup(false);setAuthed(true);try{localStorage.setItem('ut_manager_authed','true');}catch{}show('Manager profile saved');};
+  const requestSettingsChange=(patch,summary,meta={})=>{const request={id:uid(),summary,clientName:'Workspace',submittedAt:new Date().toISOString(),submittedBy:settings.managerProfile?.name||'Manager',status:'pending',scope:'settings',payloadSettingsPatch:patch,priority:meta.priority||'medium',managerComment:meta.comment||summary,requestType:meta.type||'settings_update'};const next=pushManagerAudit({...settings,managerApprovals:[...(settings.managerApprovals||[]),request]},{type:'request_submitted',actor:'manager',action:summary,requestId:request.id,clientName:'Workspace'});setSettings(next);saveSettings(next);show('Request sent to admin for approval');};
+  const queueChange=(client,updated,summary,meta={})=>{const beforeSummary=summarizeClientSnapshot(client);const afterSummary=summarizeClientSnapshot(updated);const request={id:uid(),clientId:client.id,clientName:client.name,summary,payloadClient:updated,submittedAt:new Date().toISOString(),submittedBy:settings.managerProfile?.name||'Manager',status:'pending',scope:'client',priority:meta.priority||'medium',managerComment:meta.comment||summary,requestType:meta.type||'client_update',beforeSummary,afterSummary,changePreview:diffSummaryText(beforeSummary,afterSummary)};const next=pushManagerAudit({...settings,managerApprovals:[...(settings.managerApprovals||[]),request]},{type:'request_submitted',actor:'manager',action:summary,requestId:request.id,clientName:client.name});setSettings(next);saveSettings(next);show('Request sent to admin for approval');};
+  const updateRequestComment=(id,comment)=>{const next={...settings,managerApprovals:(settings.managerApprovals||[]).map(r=>r.id===id?{...r,managerComment:comment}:r)};setSettings(next);saveSettings(next);};
+  const markManagerNotificationsRead=()=>{const next={...settings,managerNotifications:(settings.managerNotifications||[]).map(n=>({...n,read:true}))};setSettings(next);saveSettings(next);};
+  const signOut=()=>{setAuthed(false);setSelId(null);setPage('dashboard');try{localStorage.removeItem('ut_manager_authed');}catch{}};
+  if(loading)return<Loader/>;
+  if(!authed&&!needsSetup)return<ManagerLogin settings={settings} onLogin={()=>{if(settings.managerProfile){setAuthed(true);try{localStorage.setItem('ut_manager_authed','true');}catch{}}else setNeedsSetup(true);}} onSwitchPanel={onSwitchPanel}/>;
+  if(needsSetup)return<ManagerSetup settings={settings} onSaveProfile={saveProfile} onBack={()=>{setNeedsSetup(false);onSwitchPanel&&onSwitchPanel('admin');}}/>;
+  const visibleClients=getAssignedManagerClients(settings,clients);
+  const selClient=visibleClients.find(c=>c.id===selId);
+  const requests=ensureArr(settings.managerApprovals);
+  const unreadNotifications=ensureArr(settings.managerNotifications).filter(n=>!n.read).length;
+  return <div className="app-layout">{mobileMenuOpen&&<div className="sidebar-overlay" onClick={()=>setMobileMenuOpen(false)}/>}{/* Sidebar */}<aside className={`sidebar ${sideCollapsed?"collapsed":""} ${mobileMenuOpen?"mobile-open":""}`}><div className="sidebar-brand"><div style={{display:'flex',alignItems:'center',gap:10}}><div className="brand-logo" onClick={()=>setSideCollapsed(!sideCollapsed)} style={{cursor:'pointer'}}>M</div><div><div className="brand-name">Manager Panel</div><div className="brand-sub">{settings.managerProfile?.name||'Manager'}</div></div></div></div><div className="nav-section"><div className="nav-label">Workspace</div><div className={`nav-item ${page==='dashboard'&&!selId?'active':''}`} onClick={()=>{setSelId(null);setPage('dashboard');setMobileMenuOpen(false);}}><Icon n="dashboard" s={16}/><span>Dashboard</span></div><div className={`nav-item ${page==='clients'&&!selId?'active':''}`} onClick={()=>{setSelId(null);setPage('clients');setMobileMenuOpen(false);}}><Icon n="users" s={16}/><span>Clients</span></div><div className={`nav-item ${page==='approvals'?'active':''}`} onClick={()=>{setSelId(null);setPage('approvals');setMobileMenuOpen(false);}}><Icon n="check" s={16}/><span>Approval History</span>{requests.filter(r=>(r.status||'pending')==='pending').length>0&&<span className="nav-badge">{requests.filter(r=>(r.status||'pending')==='pending').length}</span>}</div><div className={`nav-item ${page==='notifications'?'active':''}`} onClick={()=>{setSelId(null);setPage('notifications');setMobileMenuOpen(false);}}><Icon n="bell" s={16}/><span>Notifications</span>{unreadNotifications>0&&<span className="nav-badge">{unreadNotifications}</span>}</div>{getManagerPermissions(settings).staff&&<div className={`nav-item ${page==='team'?'active':''}`} onClick={()=>{setSelId(null);setPage('team');setMobileMenuOpen(false);}}><Icon n="board" s={16}/><span>Team Workspace</span></div>}<div className={`nav-item ${page==='reports'?'active':''}`} onClick={()=>{setSelId(null);setPage('reports');setMobileMenuOpen(false);}}><Icon n="analytics" s={16}/><span>Reports</span></div><div className={`nav-item ${page==='profile'?'active':''}`} onClick={()=>{setSelId(null);setPage('profile');setMobileMenuOpen(false);}}><Icon n="settings" s={16}/><span>Profile</span></div><div className="nav-item" onClick={signOut}><Icon n="logout" s={16}/><span>Sign Out</span></div><div className="nav-item" onClick={()=>{setMobileMenuOpen(false);onSwitchPanel&&onSwitchPanel('staff');}}><Icon n="board" s={16}/><span>Staff Panel</span></div><div className="nav-item" onClick={()=>{setMobileMenuOpen(false);onSwitchPanel&&onSwitchPanel('admin');}}><Icon n="settings" s={16}/><span>Admin Panel</span></div></div></aside><div className="main-area"><div className="topbar"><button className="btn btn-ghost btn-icon" onClick={()=>{if(window.innerWidth<=768){setMobileMenuOpen(!mobileMenuOpen);}else{setSideCollapsed(!sideCollapsed);}}}><Icon n="menu" s={16}/></button><div className="topbar-title">{selClient?selClient.name:page==='dashboard'?'Manager Dashboard':page==='clients'?'Assigned Clients':page==='approvals'?'Approval History':page==='notifications'?'Notifications':page==='team'?'Team Workspace':page==='reports'?'Manager Reports':'Manager Profile'}</div><div className="topbar-actions"><button className="btn btn-secondary btn-sm" onClick={signOut}><Icon n="logout" s={14}/> <span>Sign Out</span></button></div></div><div className="content">{selClient?<ManagerClientDetail client={selClient} settings={settings} queueChange={queueChange} onBack={()=>setSelId(null)} show={show}/>:page==='dashboard'?<ManagerDashboard clients={visibleClients} settings={settings} requests={requests} onSelectClient={id=>setSelId(id)} onOpenPage={setPage}/>:page==='clients'?<ManagerClients clients={visibleClients} onSelect={setSelId}/>:page==='approvals'?<ManagerApprovalHistory requests={requests} onUpdateComment={updateRequestComment} onSelectClient={id=>setSelId(id)}/>:page==='notifications'?<ManagerNotificationsCenter items={ensureArr(settings.managerNotifications)} onMarkAllRead={markManagerNotificationsRead}/>:page==='team'?<ManagerTeamWorkspace settings={settings} clients={visibleClients} queueSettingsChange={requestSettingsChange} queueClientChange={queueChange} show={show}/>:page==='reports'?<ManagerReports clients={visibleClients} settings={settings} requests={requests}/>:<ManagerProfilePanel settings={settings} requestSettingsChange={requestSettingsChange} show={show}/>}</div></div>{ToastEl}</div>;
+}
+
+function StaffClients({clients,onSelect}){
+  return <div className="space-3 fade-in">
+    <div className="card card-sm">
+      <h3 style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:15,marginBottom:12}}>Staff Workspace</h3>
+      <div style={{fontSize:12,color:'var(--text3)',marginBottom:12}}>Staff can monitor project information, but cannot submit changes.</div>
+      <div className="space-2">
+        {clients.map(c=><div key={c.id} className="card card-hover" style={{padding:14,cursor:'pointer'}} onClick={()=>onSelect(c.id)}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}}>
+            <div><div style={{fontWeight:700,fontSize:14}}>{c.name}</div><div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>{c.projectName||c.company||'Client Project'}</div></div>
+            <Badge bg={sc(c.status||'Pending').bg} text={sc(c.status||'Pending').text}>{c.status||'Pending'}</Badge>
+          </div>
+        </div>)}
+      </div>
+    </div>
+  </div>;
+}
+
+function StaffClientDetail({client,settings,onBack}){
+  const [tab,setTab]=useState('overview');
+  const tabs=['overview','tasks','files','messages','timeline'];
+  return <div className="space-4 fade-in">
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+      <button className="btn btn-secondary btn-sm" onClick={onBack}><Icon n="chevLeft" s={12}/> Back</button>
+      <div style={{fontSize:12,color:'var(--text3)'}}>Staff access is read-only.</div>
+    </div>
+    <div className="card"><div style={{display:'flex',alignItems:'center',gap:14}}><Avatar name={client.name} size={46} color={settings.brandColor||'#f8fafc'}/><div><div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:18}}>{client.name}</div><div style={{fontSize:12,color:'var(--text3)'}}>{client.projectName||client.company||'Client Project'}</div></div></div></div>
+    <div><div className="tabs" style={{background:'var(--surface)',borderRadius:'14px 14px 0 0',padding:'0 8px'}}>{tabs.map(t=><div key={t} className={`tab-item ${tab===t?'active':''}`} onClick={()=>setTab(t)} style={{textTransform:'capitalize'}}>{t}</div>)}</div><div style={{background:'var(--surface)',border:'1px solid var(--border)',borderTop:'none',borderRadius:'0 0 14px 14px',padding:20}}>{tab==='overview'&&<PortalDashboardPlus client={client} settings={settings}/>} {tab==='tasks'&&<PortalProject client={client}/>} {tab==='files'&&<PortalFiles client={client}/>} {tab==='messages'&&<PortalMessagesReadOnly client={client} settings={settings}/>} {tab==='timeline'&&<AdminTimelineTab client={client}/>}</div></div>
+  </div>;
+}
+
+function PortalMessagesReadOnly({client,settings}){
+  const messages=client.messages||[];
+  const ref=useRef();
+  useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[messages.length]);
+  return <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 220px)',minHeight:280}} className="fade-in">
+    <h2 style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20,marginBottom:16}}>Messages</h2>
+    <div style={{flex:1,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:14,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      <div ref={ref} style={{flex:1,overflowY:'auto',padding:16}} className="space-2">
+        {messages.length===0?<EmptyState icon="💬" text="No messages yet."/>:
+          messages.map(m=><div key={m.id} style={{display:'flex',justifyContent:m.sender==='client'?'flex-end':'flex-start',gap:8,alignItems:'flex-end'}}>
+            {m.sender!=='client'&&<Avatar name={m.senderName||settings.businessName} size={28} color='#111111'/>}
+            <div>
+              <div className={`chat-bubble ${m.sender==='client'?'sent':'recv'}`}>{m.text}</div>
+              <AttachmentList attachments={m.attachments}/>
+              <div style={{fontSize:10,color:'var(--text3)',marginTop:3,textAlign:m.sender==='client'?'right':'left'}}>{ago(m.ts)}</div>
+            </div>
+          </div>)}
+      </div>
+    </div>
+  </div>;
+}
+
+function StaffApp({onSwitchPanel}){
+  const [settings,setSettings]=useState(DEF_SETTINGS);
+  const [clients,setClients]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [authed,setAuthed]=useState(()=>{try{return localStorage.getItem('ut_staff_authed')==='true';}catch{return false;}});
+  const [needsSetup,setNeedsSetup]=useState(false);
+  const [selId,setSelId]=useState(null);
+  const {show,ToastEl}=useToast();
+  useEffect(()=>{Promise.all([getSettings(),getClients()]).then(([s,c])=>{setSettings(s);setClients(c);setNeedsSetup(!s.staffProfile);setLoading(false);});},[]);
+  const saveProfile=profile=>{const next={...settings,staffProfile:profile};setSettings(next);saveSettings(next);setNeedsSetup(false);setAuthed(true);try{localStorage.setItem('ut_staff_authed','true');}catch{}show('Staff profile saved');};
+  if(loading)return<Loader/>;
+  if(!authed&&!needsSetup)return<StaffLogin settings={settings} onLogin={()=>{if(settings.staffProfile){setAuthed(true);try{localStorage.setItem('ut_staff_authed','true');}catch{}}else setNeedsSetup(true);}} onSwitchPanel={onSwitchPanel}/>;
+  if(needsSetup)return<StaffSetup settings={settings} onSaveProfile={saveProfile} onBack={()=>{setNeedsSetup(false);onSwitchPanel&&onSwitchPanel('admin');}}/>;
+  const selClient=clients.find(c=>c.id===selId);
+  return <div className="app-layout"><div className="sidebar"><div className="sidebar-brand"><div style={{display:'flex',alignItems:'center',gap:10}}><div className="brand-logo" style={{background:'linear-gradient(135deg,#10b981,#14b8a6)'}}>S</div><div><div className="brand-name">Staff Panel</div><div className="brand-sub">{settings.staffProfile?.name||'Staff'}</div></div></div></div><div className="nav-section"><div className="nav-label">Workspace</div><div className={`nav-item ${!selId?'active':''}`} onClick={()=>setSelId(null)}><Icon n="users" s={16}/><span>Clients</span></div><div className="nav-item" onClick={()=>{setAuthed(false);try{localStorage.removeItem('ut_staff_authed');}catch{}}}><Icon n="logout" s={16}/><span>Sign Out</span></div><div className="nav-item" onClick={()=>onSwitchPanel&&onSwitchPanel('manager')}><Icon n="board" s={16}/><span>Manager Panel</span></div><div className="nav-item" onClick={()=>onSwitchPanel&&onSwitchPanel('admin')}><Icon n="settings" s={16}/><span>Admin Panel</span></div></div></div><div className="main-area"><div className="topbar"><div className="topbar-title">{selClient?selClient.name:'Staff Dashboard'}</div></div><div className="content">{selClient?<StaffClientDetail client={selClient} settings={settings} onBack={()=>setSelId(null)}/>:<StaffClients clients={clients} onSelect={setSelId}/>}</div></div>{ToastEl}</div>;
+}
+
+function PortalBottomNav({page,setPage,setMenu,client}){
+  const adminMsgs=(client.messages||[]).filter(m=>m.sender==='admin').length;
+  const openTickets=(client.tickets||[]).filter(t=>t.status==='open').length;
+  const pendingApprovals=(client.approvals||[]).filter(a=>a.status==='pending').length;
+  const items=[
+    {id:'dashboard',label:'Home',icon:'dashboard'},
+    {id:'messages',label:'Messages',icon:'message',badge:adminMsgs},
+    {id:'invoices',label:'Invoices',icon:'invoice'},
+    {id:'tickets',label:'Support',icon:'support',badge:openTickets},
+  ];
+  return <div className="portal-bottom-nav">
+    {items.map(n=><div key={n.id} className={`portal-bnav-item ${page===n.id?'active':''}`} onClick={()=>setPage(n.id)}>
+      {n.badge>0&&<span style={{position:'absolute',top:6,right:'calc(50% - 16px)',minWidth:16,height:16,background:'#ef4444',borderRadius:99,fontSize:9,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,padding:'0 3px'}}>{n.badge}</span>}
+      <Icon n={n.icon} s={20} c={page===n.id?'var(--accent)':'var(--text3)'}/>
+      <span className="bnav-label">{n.label}</span>
+    </div>)}
+    <div className="portal-bnav-item" onClick={()=>setMenu(true)}>
+      <div style={{position:'relative'}}>
+        <Icon n="menu" s={20} c="var(--text3)"/>
+        {pendingApprovals>0&&<span style={{position:'absolute',top:-4,right:-6,width:14,height:14,background:'#f59e0b',borderRadius:'50%',fontSize:8,color:'#000',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}>{pendingApprovals}</span>}
+      </div>
+      <span className="bnav-label">More</span>
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════
+   CLIENT PORTAL (Public View)
+═══════════════════════════════════════ */
+function ClientPortalApp({clientId}){
+  const [client,setClient]=useState(null);
+  const [settings,setSettings]=useState(DEF_SETTINGS);
+  const [loading,setLoading]=useState(true);
+  const [page,setPage]=useState('dashboard');
+  const [portalMenu,setPortalMenu]=useState(false);
+  const [showMoreNav,setShowMoreNav]=useState(false);
+  const {show,ToastEl}=useToast();
+
+  useEffect(()=>{
+    const fetchClient = db()
+      ? db().collection(FS_COL).doc(clientId).get().then(snap=>snap.exists?normalizeClientData({id:snap.id,...snap.data()}):null).catch(()=>null)
+      : Promise.resolve(null);
+    Promise.all([getSettings(), fetchClient]).then(([s,clientData])=>{
+      setSettings(s);
+      if(clientData) setClient(clientData);
+      else {
+        // Fallback: try localStorage
+        const all = (()=>{try{const d=localStorage.getItem('ut_clients_v3');return d?JSON.parse(d):[];}catch{return[];}})();
+        const found = all.find(c=>c.id===clientId);
+        if(found) setClient(normalizeClientData(found));
+      }
+      setLoading(false);
+    }).catch(()=>{setLoading(false);});
+  },[clientId]);
+
+  // Real-time updates for client
+  useEffect(()=>{
+    if(!clientId||!db())return;
+    const unsub=db().collection(FS_COL).doc(clientId).onSnapshot(snap=>{
+      if(snap.exists)setClient(normalizeClientData({id:snap.id,...snap.data()}));
+    },()=>{});
+    return()=>unsub();
+  },[clientId]);
+
+  const updClient=fn=>{
+    const updated=normalizeClientData(fn(client));
+    setClient(updated);
+    saveClient(updated);
+  };
+
+  if(loading)return<Loader/>;
+  if(!client)return <div className="login-page">
+    <div className="login-card" style={{textAlign:'center'}}>
+      <div style={{fontSize:48,marginBottom:12}}>🔍</div>
+      <h2 style={{fontFamily:'var(--font-display)',fontWeight:800}}>Portal Not Found</h2>
+      <p style={{color:'var(--text3)',marginTop:8}}>This client portal link is invalid or has expired.</p>
+    </div>
+  </div>;
+
+  const unread=(client.notifications||[]).filter(n=>!n.read).length;
+  const markRead=()=>{updClient(c=>({...c,notifications:(c.notifications||[]).map(n=>({...n,read:true}))}));};
+
+  const primaryNav=[
+    {id:'dashboard',label:'Dashboard',icon:'dashboard'},
+    {id:'messages',label:'Messages',icon:'message'},
+    {id:'invoices',label:'Invoices',icon:'invoice'},
+    {id:'project',label:'My Project',icon:'project'},
+    {id:'files',label:'Files',icon:'files'},
+    {id:'approvals',label:'Approvals',icon:'check'},
+    ...(client.websiteChangeRequestEnabled?[{id:'requests',label:'Website Changes',icon:'support'}]:[]),
+    {id:'tickets',label:'Support',icon:'support'},
+  ];
+  const secondaryNav=[
+    {id:'proposals',label:'Proposals',icon:'note'},
+    {id:'contracts',label:'Contracts',icon:'contract'},
+    {id:'announcements',label:'Announcements',icon:'bell'},
+    {id:'feedback',label:'Feedback',icon:'feedback'},
+    {id:'activity',label:'Activity',icon:'analytics'},
+    {id:'onboarding',label:'Onboarding',icon:'onboard'},
+  ];
+  const activeInSecondary=secondaryNav.some(n=>n.id===page);
+
+  return <div className="portal-page" style={{minHeight:'100vh',display:'flex',flexDirection:'column'}}>
+    {/* Header */}
+    <header className="portal-header">
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+        <button className="btn btn-ghost btn-icon" onClick={()=>setPortalMenu(!portalMenu)} style={{flexShrink:0}}><Icon n="menu" s={18}/></button>
+        <div style={{width:32,height:32,borderRadius:8,overflow:'hidden',flexShrink:0}}>
+          <img src={LOGO_B64} alt="Logo" style={{width:'100%',height:'100%',objectFit:'contain'}}/>
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:14,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{settings.businessName}</div>
+        </div>
+      </div>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        {unread>0&&<button className="btn btn-ghost btn-icon" onClick={markRead} style={{position:'relative'}}>
+          <Icon n="bell" s={16}/>
+          <span style={{position:'absolute',top:2,right:2,width:16,height:16,background:'#ef4444',borderRadius:'50%',fontSize:9,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}>{unread}</span>
+        </button>}
+        <Avatar name={client.name} size={30} color={settings.brandColor||'#f8fafc'}/>
+      </div>
+    </header>
+
+    {/* Mobile menu overlay */}
+    {portalMenu&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:99,backdropFilter:'blur(2px)'}} onClick={()=>setPortalMenu(false)}/>}
+
+    {/* Slide-in sidebar menu */}
+    <div style={{position:'fixed',top:0,left:0,bottom:0,width:260,background:'var(--bg2)',borderRight:'1px solid var(--border)',zIndex:100,transform:portalMenu?'translateX(0)':'translateX(-100%)',transition:'transform .25s ease',display:'flex',flexDirection:'column'}}>
+      <div style={{padding:'20px 16px',borderBottom:'1px solid var(--border)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <Avatar name={client.name} size={40} color={settings.brandColor||'#f8fafc'}/>
+          <div>
+            <div style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:14}}>{client.name}</div>
+            <div style={{fontSize:11,color:'var(--text3)'}}>{client.company||client.projectName||'Client Portal'}</div>
+          </div>
+        </div>
+      </div>
+      <nav style={{flex:1,padding:8,overflowY:'auto'}}>
+        {primaryNav.map(n=><div key={n.id} className={`nav-item ${page===n.id?'active':''}`} onClick={()=>{setPage(n.id);setPortalMenu(false);}}>
+          <Icon n={n.icon} s={16}/><span>{n.label}</span>
+          {n.id==='messages'&&(client.messages||[]).filter(m=>m.sender==='admin').length>0&&<span className="nav-badge">{(client.messages||[]).filter(m=>m.sender==='admin').length}</span>}
+          {n.id==='tickets'&&(client.tickets||[]).filter(t=>t.status==='open').length>0&&<span className="nav-badge">{(client.tickets||[]).filter(t=>t.status==='open').length}</span>}
+          {n.id==='approvals'&&(client.approvals||[]).filter(a=>a.status==='pending').length>0&&<span className="nav-badge">{(client.approvals||[]).filter(a=>a.status==='pending').length}</span>}
+        </div>)}
+        <div className="nav-item" style={{marginTop:4,color:activeInSecondary?'#e5e7eb':'var(--text3)',fontSize:12}} onClick={()=>setShowMoreNav(v=>!v)}>
+          <span style={{fontSize:10,lineHeight:1}}>{showMoreNav||activeInSecondary?'▲':'▼'}</span>
+          <span>{showMoreNav||activeInSecondary?'Less':'More'}</span>
+        </div>
+        {(showMoreNav||activeInSecondary)&&secondaryNav.map(n=><div key={n.id} className={`nav-item ${page===n.id?'active':''}`} style={{paddingLeft:18,opacity:.85}} onClick={()=>{setPage(n.id);setPortalMenu(false);}}>
+          <Icon n={n.icon} s={15}/><span>{n.label}</span>
+        </div>)}
+      </nav>
+      <div style={{padding:'12px 16px',borderTop:'1px solid var(--border)',fontSize:11,color:'var(--text3)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:6}}><img src={LOGO_B64} alt="" style={{width:16,height:16,objectFit:'contain'}}/> {settings.businessName}</div>
+      </div>
+    </div>
+
+    {/* Content */}
+    <div className="portal-content" style={{flex:1,overflow:'auto'}}>
+      {page==='dashboard'&&<PortalDashboardPlus client={client} settings={settings} onNav={setPage}/>}
+      {page==='project'&&<PortalProject client={client}/>}
+      {page==='files'&&<PortalFiles client={client}/>}
+      {page==='messages'&&<PortalMessagesPlus client={client} updClient={updClient} settings={settings}/>}
+      {page==='proposals'&&<PortalProposals client={client} updClient={updClient} show={show} settings={settings}/>}
+      {page==='invoices'&&<PortalInvoicesPlus client={client}/>}
+      {page==='approvals'&&<PortalApprovals client={client} updClient={updClient} show={show}/>}
+      {page==='requests'&&client.websiteChangeRequestEnabled&&<PortalRequests client={client} updClient={updClient} show={show}/>}
+      {page==='contracts'&&<PortalContracts client={client} updClient={updClient} show={show}/>}
+      {page==='announcements'&&<PortalAnnouncements client={client}/>}
+      {page==='activity'&&<PortalActivity client={client} settings={settings}/>}
+      {page==='tickets'&&<PortalTickets client={client} updClient={updClient} show={show}/>}
+      {page==='feedback'&&<PortalFeedbackPlus client={client} updClient={updClient} show={show}/>}
+      {page==='onboarding'&&<PortalOnboarding client={client} updClient={updClient} show={show}/>}
+    </div>
+    <PortalBottomNav page={page} setPage={setPage} setMenu={setPortalMenu} client={client}/>
+    {ToastEl}
+  </div>;
+}
+
+
+function PortalDashboardPlus({client,settings,onNav}){
+  const tasks=client.tasks||[];
+  const invoices=client.invoices||[];
+  const tickets=client.tickets||[];
+  const total=invoices.reduce((a,i)=>a+getInvoiceTotal(i),0);
+  const paid=invoices.reduce((a,i)=>a+getInvoicePaidAmount(i),0);
+  const openTickets=tickets.filter(t=>t.status==='open').length;
+  const pendingApprovals=(client.approvals||[]).filter(a=>a.status==='pending').length;
+  return <div className="space-4 fade-in">
+    <div style={{padding:'20px 0 10px'}}><h1 style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:26}}>Welcome back, {(client.name||'').split(' ')[0]||'there'}!</h1><p style={{color:'var(--text3)',marginTop:4}}>{client.projectName||'Your project is in progress'}</p></div>
+    <div className="card" style={{background:'linear-gradient(135deg,rgba(255,255,255,.12),rgba(255,255,255,.08))',border:'1px solid rgba(255,255,255,.14)'}}><div style={{display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}><ProgressRing pct={client.progress||0} size={96} stroke={7} color={settings.brandColor||'#f8fafc'}/><div style={{flex:1}}><h2 style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:20,marginBottom:4}}>Project Progress</h2><div style={{fontSize:14,color:'var(--text2)',marginBottom:8}}>{client.projectName}</div><div style={{display:'flex',gap:12,flexWrap:'wrap'}}><Badge bg={sc(client.status||'Pending').bg} text={sc(client.status||'Pending').text}><span style={{width:6,height:6,borderRadius:'50%',background:sc(client.status||'Pending').dot}}/>{client.status||'Pending'}</Badge>{client.dueDate&&<span style={{fontSize:12,color:'var(--text3)',display:'flex',alignItems:'center',gap:4}}><Icon n="clock" s={12}/> Due {fmt(client.dueDate)}</span>}</div></div></div></div>
+    <div className="grid-4">{[{l:'Tasks Done',v:`${tasks.filter(t=>t.status==='completed').length}/${tasks.length}`,e:'✅',nav:'project'},{l:'Amount Paid',v:curr(paid),e:'💰',nav:'invoices'},{l:'Open Tickets',v:openTickets,e:'🎫',nav:'tickets'},{l:'Pending Approvals',v:pendingApprovals,e:'📋',nav:'approvals'}].map(s=><div key={s.l} className="card card-sm card-hover" style={{display:'flex',alignItems:'center',gap:12,cursor:onNav?'pointer':'default'}} onClick={()=>onNav&&onNav(s.nav)}><span style={{fontSize:24}}>{s.e}</span><div><div style={{fontSize:11,color:'var(--text3)'}}>{s.l}</div><div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:18}}>{s.v}</div></div></div>)}</div>
+    <div className="grid-2"><ReminderPanel items={client.reminders||[]} title="Automatic Reminders" empty="No upcoming reminders right now."/><div className="card card-sm"><h3 style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:14,marginBottom:10}}>Latest Announcement</h3>{(client.announcements||[]).length===0?<div style={{fontSize:12,color:'var(--text3)'}}>No announcements yet.</div>:<div><div style={{fontWeight:700,fontSize:13}}>{client.announcements[0].title}</div><div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{client.announcements[0].type} · {fmt(client.announcements[0].createdAt)}</div><p style={{fontSize:13,color:'var(--text2)',marginTop:8,lineHeight:1.5}}>{client.announcements[0].message}</p></div>}</div></div>
+    {(client.followUps||[]).length>0&&<div className="card"><h3 style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:15,marginBottom:14}}>Post-Project Follow-up Workflow</h3><div className="space-2">{(client.followUps||[]).map(f=><div key={f.id} style={{padding:'10px 12px',border:'1px solid var(--border)',borderRadius:10,display:'flex',justifyContent:'space-between',gap:10}}><div><div style={{fontWeight:600,fontSize:13}}>{f.title}</div><div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{f.description}</div></div><Badge bg={f.status==='done'?'rgba(16,185,129,.15)':f.status==='scheduled'?'rgba(59,130,246,.15)':'rgba(245,158,11,.15)'} text={f.status==='done'?'#6ee7b7':f.status==='scheduled'?'#93c5fd':'#fbbf24'}>{f.status}</Badge></div>)}</div></div>}
+    <div className="card"><h3 style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:15,marginBottom:14}}>Recent Updates</h3><ActivityFeed items={client.activity||[]} settings={settings} limit={5}/></div>
+  </div>;
+}
+
+/* ── PORTAL: PROJECT ── */
+function PortalProject({client}){
+  const tasks=client.tasks||[];
+  const cols=[{k:'todo',l:'To Do',c:'#64748b'},{k:'in_progress',l:'In Progress',c:'#3b82f6'},{k:'review',l:'Review',c:'#9ca3af'},{k:'completed',l:'Done',c:'#10b981'}];
+  return <div className="space-4 fade-in">
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <h2 style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20}}>Project Tasks</h2>
+      <div style={{fontSize:13,color:'var(--text3)'}}>{tasks.filter(t=>t.status==='completed').length}/{tasks.length} complete</div>
+    </div>
+    {tasks.length===0?<div className="empty-state"><div className="empty-icon">📋</div><div className="empty-text">No tasks added yet by your project team.</div></div>:
+      <div className="kanban-board">
+        {cols.map(col=>{
+          const colTasks=tasks.filter(t=>t.status===col.k);
+          return <div key={col.k} className="kanban-col">
+            <div className="kanban-col-header"><span style={{width:8,height:8,borderRadius:'50%',background:col.c,display:'inline-block'}}/>{col.l}<span style={{marginLeft:'auto'}}>{colTasks.length}</span></div>
+            {colTasks.map(t=>{const p=pc(t.priority);return <div key={t.id} className="task-card">
+              <div style={{fontWeight:600,fontSize:13,marginBottom:6}}>{t.title}</div>
+              {t.description&&<div style={{fontSize:11,color:'var(--text3)',lineHeight:1.5,marginBottom:6}}>{t.description}</div>}
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <Badge bg={p.bg} text={p.text}>{t.priority}</Badge>
+                {t.dueDate&&<span style={{fontSize:11,color:'var(--text3)'}}>{fmt(t.dueDate)}</span>}
+              </div>
+            </div>;})}
+            {colTasks.length===0&&<div style={{textAlign:'center',color:'var(--text3)',fontSize:12,padding:'15px 0'}}>Empty</div>}
+          </div>;
+        })}
+      </div>}
+  </div>;
+}
+
+/* ── PORTAL: FILES ── */
+function PortalFiles({client}){
+  const files=client.files||[];
+  const folders=[...new Set(files.map(f=>f.folder))].filter(Boolean);
+  return <div className="space-4 fade-in">
+    <h2 style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20}}>Files & Deliverables</h2>
+    {files.length===0?<div className="empty-state"><div className="empty-icon">📁</div><div className="empty-text">No files shared yet. Check back soon!</div></div>:
+      folders.map(folder=>{
+        const ff=files.filter(f=>f.folder===folder);
+        return <div key={folder} className="card card-sm">
+          <h3 style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:14,marginBottom:12}}>📁 {folder}</h3>
+          <div className="space-2">
+            {ff.map(f=><div key={f.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px',border:'1px solid var(--border)',borderRadius:10}}>
+              <span style={{fontSize:20}}>{f.type==='figma'?'🎨':f.type==='drive'?'📁':f.type==='doc'?'📄':'🔗'}</span>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:13}}>{f.name} <span style={{color:'var(--text3)',fontWeight:400,fontSize:11}}>{f.version}</span></div>
+                <div style={{fontSize:11,color:'var(--text3)'}}>{fmt(f.addedDate)}</div>
+              </div>
+              <a href={f.url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm"><Icon n="download" s={12}/> Open</a>
+            </div>)}
+          </div>
+        </div>;
+      })}
+  </div>;
+}
+
+/* ── PORTAL: APPROVALS ── */
+function PortalApprovals({client,updClient,show}){
+  const approvals=client.approvals||[];
+  const respond=(id,status,comment)=>{
+    updClient(c=>addLog({...c,approvals:c.approvals.map(a=>a.id===id?{...a,status,clientComment:comment}:a)},`Approval ${status}: ${c.approvals.find(a=>a.id===id)?.title}`));
+    show(`Marked as ${status}!`);
+  };
+  const [comments,setComments]=useState({});
+  return <div className="space-4 fade-in">
+    <h2 style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20}}>Approvals</h2>
+    {approvals.length===0?<div className="empty-state"><div className="empty-icon">✅</div><div className="empty-text">No approval requests yet.</div></div>:
+      approvals.map(a=><div key={a.id} className={`approval-card ${a.status==='pending'?'approval-pending':a.status==='approved'?'approval-approved':'approval-changes'}`}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:15}}>{a.title}</div>
+            <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{a.category} · {fmt(a.createdAt)}</div>
+          </div>
+          <Badge bg={a.status==='approved'?'rgba(16,185,129,.15)':a.status==='changes_requested'?'rgba(239,68,68,.15)':'rgba(245,158,11,.15)'} text={a.status==='approved'?'#6ee7b7':a.status==='changes_requested'?'#fca5a5':'#fbbf24'}>
+            {a.status==='changes_requested'?'Changes Requested':a.status.charAt(0).toUpperCase()+a.status.slice(1)}
+          </Badge>
+        </div>
+        {a.description&&<p style={{fontSize:13,color:'var(--text2)',marginBottom:10,lineHeight:1.5}}>{a.description}</p>}
+        {a.fileUrl&&<a href={a.fileUrl} target="_blank" rel="noreferrer" style={{fontSize:12,color:'#d1d5db',display:'flex',alignItems:'center',gap:4,marginBottom:12,textDecoration:'none'}}><Icon n="link" s={12}/> View File / Preview</a>}
+        {a.status==='pending'&&<div className="space-2">
+          <textarea className="input" rows="2" placeholder="Optional feedback / comment…" value={comments[a.id]||''} onChange={e=>setComments(p=>({...p,[a.id]:e.target.value}))}/>
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn btn-success btn-sm" onClick={()=>respond(a.id,'approved',comments[a.id]||'')}>✓ Approve</button>
+            <button className="btn btn-danger btn-sm" onClick={()=>respond(a.id,'changes_requested',comments[a.id]||'')}>Request Changes</button>
+          </div>
+        </div>}
+        {a.clientComment&&<div style={{marginTop:10,padding:10,background:'rgba(255,255,255,.04)',borderRadius:8,fontSize:12,color:'var(--text3)'}}>Your feedback: {a.clientComment}</div>}
+      </div>)}
+  </div>;
+}
+
+/* ── PORTAL: TICKETS ── */
+function PortalTickets({client,updClient,show}){
+  const [modal,setModal]=useState(false);
+  const [form,setForm]=useState({subject:'',description:'',priority:'medium'});
+  const tickets=client.tickets||[];
+  const create=()=>{
+    if(!form.subject||!form.description)return;
+    const t={...form,id:uid(),status:'open',createdAt:new Date().toISOString(),replies:[]};
+    updClient(c=>addLog({...c,tickets:[...(c.tickets||[]),t]},`Support ticket raised: ${t.subject}`));
+    setModal(false);setForm({subject:'',description:'',priority:'medium'});show('Ticket submitted!');
+  };
+  return <div className="space-4 fade-in">
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <h2 style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20}}>Support Tickets</h2>
+      <button className="btn btn-primary btn-sm" onClick={()=>setModal(true)}><Icon n="plus" s={13}/> New Ticket</button>
+    </div>
+    {tickets.length===0?<div className="empty-state"><div className="empty-icon">🎫</div><div className="empty-text">No support tickets. Need help? Raise a ticket!</div></div>:
+      tickets.map(t=><div key={t.id} className="card card-sm">
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+          <div style={{fontWeight:700,fontSize:14}}>{t.subject}</div>
+          <div style={{display:'flex',gap:6}}>
+            <Badge bg={pc(t.priority).bg} text={pc(t.priority).text}>{t.priority}</Badge>
+            <Badge bg={t.status==='open'?'rgba(239,68,68,.15)':'rgba(16,185,129,.15)'} text={t.status==='open'?'#fca5a5':'#6ee7b7'}>{t.status}</Badge>
+          </div>
+        </div>
+        <p style={{fontSize:13,color:'var(--text2)',lineHeight:1.5,marginBottom:8}}>{t.description}</p>
+        <div style={{fontSize:11,color:'var(--text3)'}}>{ago(t.createdAt)}</div>
+        {(t.replies||[]).length>0&&<div style={{marginTop:10,padding:10,background:'rgba(255,255,255,.04)',borderRadius:8,fontSize:12}}>
+          {t.replies.slice(-1).map(r=><div key={r.id}>
+            <div style={{color:'var(--text3)',marginBottom:3,fontWeight:600}}>{r.sender==='admin'?'Project Team':'You'} · {ago(r.ts)}</div>
+            <div style={{color:'var(--text)'}}>{r.text}</div>
+          </div>)}
+        </div>}
+      </div>)}
+    {modal&&<Modal title="Raise Support Ticket" onClose={()=>setModal(false)}>
+      <div className="space-3">
+        <div><label className="form-label">Subject *</label><input className="input" placeholder="Brief description of the issue" value={form.subject} onChange={e=>setForm(p=>({...p,subject:e.target.value}))}/></div>
+        <div><label className="form-label">Description *</label><textarea className="input" rows="4" placeholder="Describe the issue in detail…" value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))}/></div>
+        <div><label className="form-label">Priority</label>
+          <select className="input" value={form.priority} onChange={e=>setForm(p=>({...p,priority:e.target.value}))}>
+            {['low','medium','high'].map(p=><option key={p}>{p}</option>)}
+          </select>
+        </div>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+          <button className="btn btn-secondary" onClick={()=>setModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={create}>Submit Ticket</button>
+        </div>
+      </div>
+    </Modal>}
+  </div>;
+}
+
+/* ── PORTAL: ONBOARDING ── */
+function PortalOnboarding({client,updClient,show}){
+  const [form,setForm]=useState({businessDetails:'',goals:'',logoProvided:false,contentProvided:false,referencesProvided:false,...(client.onboardingData||{})});
+  const save=()=>{
+    const done=form.logoProvided&&form.contentProvided&&form.referencesProvided&&!!form.businessDetails;
+    updClient(c=>addLog({...c,onboardingData:form,onboardingCompleted:done},'Onboarding data updated'));
+    show('Saved successfully!');
+  };
+  const checklist=[
+    {k:'logoProvided',l:'Logo & Brand Assets',d:'Upload your logo, colors, and font preferences.',e:'🎨'},
+    {k:'contentProvided',l:'Content & Copy',d:'All written content for the project.',e:'📝'},
+    {k:'referencesProvided',l:'Reference Websites',d:'Share websites you like for inspiration.',e:'🔗'},
+  ];
+  const done=checklist.filter(c=>form[c.k]).length;
+
+  return <div className="space-4 fade-in">
+    <div className="card" style={{background:'linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.06))',border:'1px solid rgba(255,255,255,.14)'}}>
+      <h2 style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:22,color:'var(--text)'}}>Welcome! Let's get started 🚀</h2>
+      <p style={{color:'var(--text2)',marginTop:8,lineHeight:1.6}}>Please complete the onboarding checklist so we can begin your project as soon as possible.</p>
+    </div>
+    <div className="card card-sm">
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+        <span style={{fontSize:13,fontWeight:600}}>Onboarding Progress</span>
+        <span style={{fontSize:13,color:'var(--text3)'}}>{done}/{checklist.length}</span>
+      </div>
+      <div className="progress-bar" style={{height:8}}><div className="progress-fill" style={{width:`${Math.round(done/checklist.length*100)}%`}}/></div>
+    </div>
+    <div className="card card-sm space-2">
+      <h3 style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:14,marginBottom:10}}>Checklist</h3>
+      {checklist.map(item=><div key={item.k} onClick={()=>setForm(p=>({...p,[item.k]:!p[item.k]}))} style={{display:'flex',alignItems:'flex-start',gap:12,padding:'12px',borderRadius:10,border:'1px solid',borderColor:form[item.k]?'rgba(16,185,129,.3)':'var(--border)',background:form[item.k]?'rgba(16,185,129,.06)':'transparent',cursor:'pointer',transition:'all .15s'}}>
+        <div style={{width:22,height:22,borderRadius:'50%',border:`2px solid ${form[item.k]?'#10b981':'var(--border2)'}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1,background:form[item.k]?'#10b981':'transparent'}}>
+          {form[item.k]&&<span style={{color:'#fff',fontSize:11,fontWeight:700}}>✓</span>}
+        </div>
+        <div>
+          <div style={{fontWeight:600,fontSize:13,color:form[item.k]?'#6ee7b7':'var(--text)'}}>{item.e} {item.l}</div>
+          <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>{item.d}</div>
+        </div>
+      </div>)}
+    </div>
+    <div className="card space-3">
+      <h3 style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:14}}>Business Information</h3>
+      <div><label className="form-label">About Your Business *</label><textarea className="input" rows="3" placeholder="Describe your business, industry, and target audience…" value={form.businessDetails} onChange={e=>setForm(p=>({...p,businessDetails:e.target.value}))}/></div>
+      <div><label className="form-label">Project Goals</label><textarea className="input" rows="3" placeholder="What do you want to achieve? What does success look like?" value={form.goals} onChange={e=>setForm(p=>({...p,goals:e.target.value}))}/></div>
+      <button className="btn btn-primary" onClick={save}>Save Onboarding Info</button>
+    </div>
+  </div>;
+}
+
+
+/* ── PORTAL: FEEDBACK ── */
+function PortalFeedback({client,updClient,show}){
+  const feedback=(client.feedback||[]).filter(f=>f.response===null);
+  const answered=(client.feedback||[]).filter(f=>f.response!==null);
+  const respond=(id,response)=>{updClient(c=>addLog({...c,feedback:(c.feedback||[]).map(f=>f.id===id?{...f,response}:f)},'Feedback submitted'));show('Feedback submitted!');};
+  const [ratings,setRatings]=useState({});const [texts,setTexts]=useState({});
+  return <div className="space-4 fade-in">
+    <h2 style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20}}>Feedback</h2>
+    {feedback.length===0&&answered.length===0?<EmptyState icon="⭐" text="No feedback requests yet."/>:null}
+    {feedback.length>0&&<div className="space-3">
+      <h3 style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:15}}>Pending</h3>
+      {feedback.map(f=><div key={f.id} className="card card-sm">
+        <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>{f.question}</div>
+        {f.type==='rating'&&<div style={{display:'flex',gap:4,marginBottom:8}}>{[1,2,3,4,5].map(s=><span key={s} style={{fontSize:28,cursor:'pointer',color:s<=(ratings[f.id]||0)?'#fbbf24':'var(--text3)',transition:'.1s'}} onClick={()=>setRatings(p=>({...p,[f.id]:s}))}>★</span>)}</div>}
+        {f.type==='text'&&<textarea className="input" rows="2" placeholder="Your response…" value={texts[f.id]||''} onChange={e=>setTexts(p=>({...p,[f.id]:e.target.value}))} style={{marginBottom:8}}/>}
+        {f.type==='yesno'&&<div style={{display:'flex',gap:8,marginBottom:8}}><button className="btn btn-success btn-sm" onClick={()=>respond(f.id,'Yes')}>Yes</button><button className="btn btn-danger btn-sm" onClick={()=>respond(f.id,'No')}>No</button></div>}
+        {f.type!=='yesno'&&<button className="btn btn-primary btn-sm" onClick={()=>{const val=f.type==='rating'?ratings[f.id]:texts[f.id];if(val)respond(f.id,val);}}>Submit</button>}
+      </div>)}
+    </div>}
+    {answered.length>0&&<div className="space-3">
+      <h3 style={{fontFamily:'var(--font-display)',fontWeight:700,fontSize:15}}>Completed</h3>
+      {answered.map(f=><div key={f.id} className="card card-sm" style={{opacity:.7}}>
+        <div style={{fontWeight:600,fontSize:13}}>{f.question}</div>
+        <div style={{marginTop:6,fontSize:13,color:'var(--text2)'}}>Your response: {f.type==='rating'?'★'.repeat(f.response):String(f.response)}</div>
+      </div>)}
+    </div>}
+  </div>;
+}

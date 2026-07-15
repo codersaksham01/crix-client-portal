@@ -1,0 +1,151 @@
+/* ═══ FIREBASE DB ═══ */
+const FS_COL='clients_v3';
+const FS_SETTINGS='settings/main';
+const DEF_SETTINGS={adminPassword:'admin123',businessName:'Crixy Ai',tagline:'Your Digital Growth Partner',brandColor:'#111111',ownerName:'Admin',currency:'₹',locale:'en-IN',timezone:'Asia/Kolkata',defaultPaymentTerms:30,workingHoursPerDay:8,hourlyRate:2000,taxRate:18,companyEmail:'',companyPhone:'',companyAddress:'',companyWebsite:'',companyLogo:'',invoicePrefix:'INV',invoiceNotes:'Thank you for your business!',onboardingChecklist:['Logo & Brand Assets','Content & Copy','Reference Websites','Brand Guidelines','Login Credentials'],managerProfile:null,managerApprovals:[],managerAssignedClientIds:[],managerPermissions:null,managerNotifications:[],managerAudit:[],managerPrivateNotes:[],staffMembers:[],staffPassword:'staff1908',staffProfile:null};
+const MANAGER_PASSWORD='Udit123';
+const DEF_MANAGER_PERMISSIONS={overview:true,tasks:true,files:true,messages:true,requests:true,timeline:true,meetings:true,notes:true,staff:true,finance:false};
+
+/* Safe accessor — resolves window._db at call time, never at parse time */
+const db=()=>window._db;
+
+const LS_SETTINGS='ut_settings';
+const LS_CLIENTS='ut_clients_v3';
+
+const LS_TEMPLATES='ut_templates';
+const _lsGet=(key,def)=>{try{const d=localStorage.getItem(key);return d?JSON.parse(d):def;}catch{return def;}};
+const _lsSave=(key,val)=>{try{localStorage.setItem(key,JSON.stringify(val));}catch{}};
+
+function normalizeClientData(client){
+  if(!client)return client;
+  let completedAt=client.completedAt||null;
+  if(!completedAt&&((client.progress||0)>=100||client.status==='Completed'))completedAt=new Date().toISOString();
+
+  const invoices=ensureArr(client.invoices).map(inv=>{
+    const payments=ensureArr(inv.payments);
+    const paid=getInvoicePaidAmount({...inv,payments});
+    const total=getInvoiceTotal(inv);
+    let status=inv.status||'draft';
+    if(paid>0&&paid<total)status='partial';
+    if(total>0&&paid>=total)status='paid';
+    if(status!=='paid'&&inv.dueDate&&new Date(inv.dueDate)<new Date()&&status!=='draft')status='overdue';
+    return {...inv,payments,reminders:ensureArr(inv.reminders),receiptUrl:inv.receiptUrl||'',status};
+  });
+
+  const approvals=ensureArr(client.approvals).map(a=>({...a,comments:ensureArr(a.comments)}));
+  const messages=ensureArr(client.messages).map(m=>({...m,attachments:ensureArr(m.attachments)}));
+  const contracts=ensureArr(client.contracts).map(c=>({...c,signatureName:c.signatureName||'',signatureEmail:c.signatureEmail||'',signedAt:c.signedAt||null,status:c.status||'draft'}));
+  const proposals=ensureArr(client.proposals).map(p=>({...p,items:ensureArr(p.items),status:p.status||'draft'}));
+  const announcements=ensureArr(client.announcements).map(a=>({...a,type:a.type||'update'}));
+  const requests=ensureArr(client.requests).map(r=>({...r,status:r.status||'new',type:r.type||'revision'}));
+  let followUps=ensureArr(client.followUps);
+  if(completedAt){
+    const defaults=[
+      {key:'testimonial',title:'Request testimonial',description:'Ask the client for a testimonial after project completion.'},
+      {key:'feedback',title:'Send post-project feedback form',description:'Collect final feedback and satisfaction score.'},
+      {key:'upsell',title:'Plan upsell / maintenance offer',description:'Share next-step support, retainers, or growth offers.'},
+    ];
+    defaults.forEach(item=>{
+      if(!followUps.find(f=>f.key===item.key))followUps.push({...item,id:uid(),status:'pending',createdAt:new Date().toISOString()});
+    });
+  }
+
+  const reminders=[];
+  invoices.forEach(inv=>{
+    if(inv.status==='overdue')reminders.push({id:`inv-overdue-${inv.id}`,type:'invoice',priority:'high',text:`Invoice ${inv.number||''} is overdue`,dueDate:inv.dueDate||null});
+    else if(inv.status!=='paid'&&inv.status!=='draft'&&isUpcoming(inv.dueDate,5))reminders.push({id:`inv-upcoming-${inv.id}`,type:'invoice',priority:'medium',text:`Invoice ${inv.number||''} is due soon`,dueDate:inv.dueDate});
+  });
+  approvals.filter(a=>a.status==='pending').forEach(a=>reminders.push({id:`approval-${a.id}`,type:'approval',priority:'medium',text:`Approval pending: ${a.title}`,dueDate:a.createdAt}));
+  ensureArr(client.tasks).filter(t=>t.status!=='completed'&&isUpcoming(t.dueDate,3)).forEach(t=>reminders.push({id:`task-${t.id}`,type:'task',priority:t.priority||'medium',text:`Task deadline approaching: ${t.title}`,dueDate:t.dueDate}));
+  if(isUpcoming(client.dueDate,5))reminders.push({id:'project-due',type:'project',priority:'high',text:'Project due date is approaching',dueDate:client.dueDate});
+
+  return {
+    ...client,
+    completedAt,
+    activity:ensureArr(client.activity),
+    notifications:ensureArr(client.notifications),
+    messages,
+    tasks:ensureArr(client.tasks),
+    milestones:ensureArr(client.milestones),
+    files:ensureArr(client.files),
+    invoices,
+    approvals,
+    tickets:ensureArr(client.tickets),
+    timeEntries:ensureArr(client.timeEntries),
+    notes:ensureArr(client.notes),
+    contracts,
+    feedback:ensureArr(client.feedback),
+    expenses:ensureArr(client.expenses),
+    meetings:ensureArr(client.meetings),
+    links:ensureArr(client.links),
+    announcements,
+    proposals,
+    requests,
+    followUps,
+    reminders,
+    websiteChangeRequestEnabled: client.websiteChangeRequestEnabled||false,
+  };
+}
+
+const getSettings=()=>{
+  if(!db()) return Promise.resolve(_lsGet(LS_SETTINGS,null)||{...DEF_SETTINGS});
+  return db().doc(FS_SETTINGS).get()
+    .then(s=>{const d=s.exists?{...DEF_SETTINGS,...s.data()}:{...DEF_SETTINGS};_lsSave(LS_SETTINGS,d);return d;})
+    .catch(()=>_lsGet(LS_SETTINGS,null)||{...DEF_SETTINGS});
+};
+const saveSettings=s=>{
+  _lsSave(LS_SETTINGS,s);
+  if(!db()) return Promise.resolve();
+  return db().doc(FS_SETTINGS).set(s,{merge:true}).catch(()=>{});
+};
+
+const getClients=()=>{
+  if(!db()) return Promise.resolve(_lsGet(LS_CLIENTS,[]).map(normalizeClientData));
+  return db().collection(FS_COL).get()
+    .then(q=>{const r=[];q.forEach(d=>r.push(normalizeClientData({id:d.id,...d.data()})));_lsSave(LS_CLIENTS,r);return r;})
+    .catch(()=>_lsGet(LS_CLIENTS,[]).map(normalizeClientData));
+};
+const saveClient=c=>{
+  const normalized=normalizeClientData(c);
+  const all=_lsGet(LS_CLIENTS,[]);
+  const idx=all.findIndex(x=>x.id===normalized.id);
+  if(idx>=0)all[idx]=normalized;else all.push(normalized);
+  _lsSave(LS_CLIENTS,all);
+  if(!db()) return Promise.resolve();
+  return db().collection(FS_COL).doc(normalized.id).set(normalized).catch(()=>{});
+};
+const deleteClient=id=>{
+  _lsSave(LS_CLIENTS,_lsGet(LS_CLIENTS,[]).filter(c=>c.id!==id));
+  if(!db()) return Promise.resolve();
+  return db().collection(FS_COL).doc(id).delete().catch(()=>{});
+};
+
+const addLog=(c,action,by='admin')=>{const ts=new Date().toISOString();return{...c,activity:[{id:uid(),action,by,ts},...(c.activity||[])].slice(0,100),notifications:[{id:uid(),text:action,read:false,ts},...(c.notifications||[])].slice(0,50)};};
+const getManagerPermissions=settings=>({...DEF_MANAGER_PERMISSIONS,...(settings?.managerPermissions||{})});
+const getAssignedManagerClients=(settings,clients)=>{
+  const ids=ensureArr(settings?.managerAssignedClientIds);
+  return ids.length?clients.filter(c=>ids.includes(c.id)):clients;
+};
+const summarizeClientSnapshot=client=>({
+  progress:client?.progress||0,
+  status:client?.status||'Pending',
+  taskCount:ensureArr(client?.tasks).length,
+  fileCount:ensureArr(client?.files).length,
+  messageCount:ensureArr(client?.messages).length,
+  requestCount:ensureArr(client?.requests).length,
+  meetingCount:ensureArr(client?.meetings).length,
+});
+const diffSummaryText=(before,after)=>{
+  const parts=[];
+  if(before.status!==after.status)parts.push(`status ${before.status} -> ${after.status}`);
+  if(before.progress!==after.progress)parts.push(`progress ${before.progress}% -> ${after.progress}%`);
+  if(before.taskCount!==after.taskCount)parts.push(`tasks ${before.taskCount} -> ${after.taskCount}`);
+  if(before.fileCount!==after.fileCount)parts.push(`files ${before.fileCount} -> ${after.fileCount}`);
+  if(before.messageCount!==after.messageCount)parts.push(`messages ${before.messageCount} -> ${after.messageCount}`);
+  if(before.requestCount!==after.requestCount)parts.push(`requests ${before.requestCount} -> ${after.requestCount}`);
+  if(before.meetingCount!==after.meetingCount)parts.push(`meetings ${before.meetingCount} -> ${after.meetingCount}`);
+  return parts.length?parts.join(' | '):'General project update';
+};
+const pushManagerAudit=(settings,entry)=>({
+  ...settings,
+  managerAudit:[{id:uid(),ts:new Date().toISOString(),...entry},...(settings.managerAudit||[])].slice(0,200),
+});
