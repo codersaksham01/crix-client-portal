@@ -90,8 +90,11 @@ function renderHtmlToPdfWithLocalBrowser(html, invoiceNumber, browser) {
 async function renderHtmlToPdfWithChromium(html) {
   let browser;
   try {
-    const chromium = require('@sparticuz/chromium');
-    const puppeteer = require('puppeteer-core');
+    const chromiumModule = await import('@sparticuz/chromium');
+    const puppeteerModule = await import('puppeteer-core');
+    const chromium = chromiumModule.default || chromiumModule;
+    const puppeteer = puppeteerModule.default || puppeteerModule;
+
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
